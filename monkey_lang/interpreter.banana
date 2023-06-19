@@ -2,7 +2,10 @@ let null = rest([]);
 
 let for = fn(low, high, callback) {
     if (low < high) {
-        callback(low);
+        let returnValue = callback(low);
+        if (!is_null(returnValue)) {
+            return returnValue;
+        }
         for(low + 1, high, callback);
     }
 };
@@ -10,8 +13,8 @@ let for = fn(low, high, callback) {
 let forEach = fn(array, callback) {
     let count = len(array);
 
-    for(0, count, fn(i, acc) {
-        callback(array[i]);
+    for(0, count, fn(i) {
+        callback(array[i], i);
     });
 };
 
@@ -220,9 +223,35 @@ let is_digit = fn(ch) {
     return false;
 };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"Tokenizer";
+
 let keyWords = {
     "fn": "FUNCTION",
     "let": "LET",
+    "true": "TRUE",
+    "false": "FALSE",
+    "if": "IF",
+    "else": "ELSE",
+    "return": "RETURN",
 };
 
 let Token_create = fn(tokenType, literal) {
@@ -258,13 +287,34 @@ let Tokenizer_readNextChar = fn(tokenizer) {
     object_set(tokenizer, "readPosition", tokenizer["readPosition"] + 1);
 };
 
+let Tokenizer_peekChar = fn(tokenizer) {
+    if (tokenizer["readPosition"] + 1 > tokenizer["length"]) {
+        return "\u0000";
+    } else {
+        return char_at(tokenizer["input"], tokenizer["readPosition"]);
+    }
+};
+
 let Tokenizer_nextToken = fn(tokenizer) {
     Tokenizer_skipWhitespace(tokenizer);
 
     let ch = tokenizer["ch"];
     let token = null;
     if (ch == "=") {
-        token = Token_create("ASSIGN", ch);
+        if (Tokenizer_peekChar(tokenizer) == "=") {
+            Tokenizer_readNextChar(tokenizer);
+            token = Token_create("EQ", "==");
+        } else {
+            token = Token_create("ASSIGN", ch);
+        }
+    }
+    if (ch == "!") {
+        if (Tokenizer_peekChar(tokenizer) == "=") {
+            Tokenizer_readNextChar(tokenizer);
+            token = Token_create("NOT_EQ", "!=");
+        } else {
+            token = Token_create("NOT", ch);
+        }
     }
     if (ch == ";") {
         token = Token_create("SEMICOLON", ch);
@@ -362,7 +412,159 @@ let Tokenizer_readNumber = fn(tokenizer) {
 };
 
 
-let tokenizer = Tokenizer_create("let five = 5; let ten = 10; let add = fn(x, y) { x + y; }; let result = add(five, ten);");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"AST";
+
+
+let Program_create = fn(statements) {
+    return {
+        "type": "Program",
+        "statements": statements,
+        "token_literal": fn () {
+            if (len(statements) > 0) {
+                return statements[0]["token_literal"]();
+            } else {
+                return "";
+            }
+        },
+    };
+};
+
+let LetStatement_create = fn(token, name, value) {
+    return {
+        "type": "LetStatement",
+        "token": token,
+        "name": name,
+        "value": value,
+        "token_literal": fn () {
+            return token["literal"];
+        },
+    };
+};
+
+let Identifier_create = fn(token, value) {
+    return {
+        "type": "Identifier",
+        "token": token,
+        "value": value,
+        "token_literal": fn () {
+            return token["literal"];
+        },
+    };
+};
+
+let Parser_create = fn(tokenizer) {
+    let parser = {
+        "tokenizer": tokenizer,
+        "currentToken": null,
+        "peekToken": null,
+        "errors": [],
+    };
+
+    Parser_nextToken(parser);
+    Parser_nextToken(parser);
+
+    return parser;
+};
+
+let Parser_nextToken = fn(parser) {
+    object_set(parser, "currentToken", parser["peekToken"]);
+    object_set(parser, "peekToken", Tokenizer_nextToken(parser["tokenizer"]));
+};
+
+
+let Parser_parseProgram = fn(parser) {
+    let statements = [];
+    while(fn () {
+        let token = parser["currentToken"];
+        return token["type"] != "EOF";
+    }, fn () {
+        let statement = Parser_parseStatement(parser);
+        if (!is_null(statement)) {
+            statements = push(statements, statement);
+        }
+        Parser_nextToken(parser);
+    });
+
+    return Program_create(statements);
+};
+
+let Parser_peekError = fn(parser, type) {
+    let message = "expected next token to be " + type + ", got " + parser["peekToken"]["type"] + " instead";
+    let errors = push(parser["errors"], message);
+    object_set(parser, "errors", errors);
+};
+
+let Parser_expectPeek = fn(parser, type) {
+    if (parser["peekToken"]["type"] == type) {
+        Parser_nextToken(parser);
+        return true;
+    } else {
+        Parser_peekError(parser, type);
+        return false;
+    }
+};
+
+let Parser_parseStatement = fn(parser) {
+    let token = parser["currentToken"];
+    if (token["type"] == "LET") {
+        return Parser_parseLetStatement(parser);
+    } else {
+        return null;
+    }
+};
+
+let Parser_parseLetStatement = fn(parser) {
+    let token = parser["currentToken"];
+    if (!Parser_expectPeek(parser, "IDENT")) {
+        return null;
+    }
+
+    let name = Identifier_create(parser["currentToken"], parser["currentToken"]["literal"]);
+    if (!Parser_expectPeek(parser, "ASSIGN")) {
+        return null;
+    }
+
+    while(fn () {
+        let token = parser["currentToken"];
+        return token["type"] != "SEMICOLON";
+    }, fn () {
+        Parser_nextToken(parser);
+    });
+
+    return LetStatement_create(token, name, null);
+};
+
+
+
+
+let tokenizer = Tokenizer_create("let five = 5; let ten = 10; let add = fn(x, y) { x + y; }; let result = add(five, ten);   let cmp = five == ten; let cmp_ = five != ten; ");
 let token = Tokenizer_nextToken(tokenizer);
 while(fn () {
     if (is_null(token)) {
